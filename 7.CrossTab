@@ -1,0 +1,201 @@
+library(survival)
+library(openxlsx)
+library(ggplot2)
+library(xtable)
+library(dplyr)
+library(survminer)
+library(readxl)
+ 
+sn <- read_excel("~/Desktop/Doktorarbeit/AXL/Heatmap/hm_new_try/final_edition/Column_annotation1.xlsx", sheet = 3)
+sn.tab <- table(sn$HPV16,sn$Cluster)
+sn.tab
+round(prop.table(sn.tab), 2)
+round(prop.table(sn.tab,1),2)
+round(prop.table(sn.tab,2),2)
+#names(sn)
+chisq.test(sn.tab)
+#da viele werte unter 5 -> ChiQ kann inkorrekt sein, deswegen jetzt Fisher Testfür exakten p wert:
+fisher.test(sn$HPV16, sn$Cluster)
+
+#cN Lymphnode Metastasis
+sn.tab <- table(sn$cN,sn$Cluster)
+sn.tab
+round(prop.table(sn.tab), 2)
+round(prop.table(sn.tab,1),2)
+round(prop.table(sn.tab,2),2)
+#names(sn)
+chisq.test(sn.tab)
+
+#pN Lymphnode Metastasis
+sn.tab <- table(sn$pN,sn$Cluster)
+sn.tab
+round(prop.table(sn.tab), 2)
+round(prop.table(sn.tab,1),2)
+round(prop.table(sn.tab,2),2)
+#names(sn)
+chisq.test(sn.tab)
+
+
+#TumorSize pT
+sn.tab <- table(sn$pT,sn$Cluster)
+sn.tab
+round(prop.table(sn.tab), 2)
+round(prop.table(sn.tab,1),2)
+round(prop.table(sn.tab,2),2)
+#names(sn)
+chisq.test(sn.tab)
+
+#ALI angiolymphatic invasion
+sn.tab <- table(sn$ALI,sn$Cluster)
+sn.tab
+round(prop.table(sn.tab), 2)
+round(prop.table(sn.tab,1),2)
+round(prop.table(sn.tab,2),2)
+#names(sn)
+chisq.test(sn.tab)
+
+
+#Subsite
+sn.tab <- table(sn$Subsite,sn$Cluster)
+sn.tab
+round(prop.table(sn.tab), 2)
+round(prop.table(sn.tab,1),2)
+round(prop.table(sn.tab,2),2)
+#names(sn)
+chisq.test(sn.tab)
+
+sn.tab <- table(sn$`Risk model`,sn$Cluster)
+sn.tab
+round(prop.table(sn.tab), 2)
+round(prop.table(sn.tab,1),2)
+round(prop.table(sn.tab,2),2)
+#names(sn)
+chisq.test(sn.tab)
+
+sn.tab <- table(sn$Gender,sn$Cluster)
+sn.tab
+round(prop.table(sn.tab), 2)
+round(prop.table(sn.tab,1),2)
+round(prop.table(sn.tab,2),2)
+#names(sn)
+chisq.test(sn.tab)
+
+
+sn.tab <- table(sn$Smoking,sn$Cluster)
+sn.tab
+round(prop.table(sn.tab), 2)
+round(prop.table(sn.tab,1),2)
+round(prop.table(sn.tab,2),2)
+#names(sn)
+chisq.test(sn.tab)
+
+sn.tab <- table(sn$Age,sn$Cluster)
+sn.tab
+round(prop.table(sn.tab), 2)
+round(prop.table(sn.tab,1),2)
+round(prop.table(sn.tab,2),2)
+#names(sn)
+chisq.test(sn.tab)
+
+sn.tab <- table(sn$Alcohol,sn$Cluster)
+sn.tab
+round(prop.table(sn.tab), 2)
+round(prop.table(sn.tab,1),2)
+round(prop.table(sn.tab,2),2)
+#names(sn)
+chisq.test(sn.tab)
+
+sn.tab <- table(sn$OS_5y_event,sn$Cluster)
+sn.tab
+round(prop.table(sn.tab), 2)
+round(prop.table(sn.tab,1),2)
+round(prop.table(sn.tab,2),2)
+#names(sn)
+chisq.test(sn.tab)
+
+sn.tab <- table(sn$Radiation,sn$Cluster)
+sn.tab
+round(prop.table(sn.tab), 2)
+round(prop.table(sn.tab,1),2)
+round(prop.table(sn.tab,2),2)
+#names(sn)
+chisq.test(sn.tab)
+
+sn.tab <- table(sn$DSS,sn$Cluster)
+sn.tab
+round(prop.table(sn.tab), 2)
+round(prop.table(sn.tab,1),2)
+round(prop.table(sn.tab,2),2)
+#names(sn)
+chisq.test(sn.tab)
+
+
+
+sn.tab <- table(sn$PFI,sn$Cluster)
+sn.tab
+round(prop.table(sn.tab), 2)
+round(prop.table(sn.tab,1),2)
+round(prop.table(sn.tab,2),2)
+#names(sn)
+chisq.test(sn.tab)
+
+
+sn.tab <- table(sn$ALI,sn$Cluster)
+sn.tab
+round(prop.table(sn.tab), 2)
+round(prop.table(sn.tab,1),2)
+round(prop.table(sn.tab,2),2)
+#names(sn)
+chisq.test(sn.tab)
+
+
+sn.tab <- table(sn$PNI,sn$Cluster)
+sn.tab
+round(prop.table(sn.tab), 2)
+round(prop.table(sn.tab,1),2)
+round(prop.table(sn.tab,2),2)
+#names(sn)
+chisq.test(sn.tab)
+
+
+
+sn.tab <- table(sn$Radiation,sn$Cluster)
+sn.tab
+round(prop.table(sn.tab), 2)
+round(prop.table(sn.tab,1),2)
+round(prop.table(sn.tab,2),2)
+#names(sn)
+chisq.test(sn.tab)
+
+
+sn.tab <- table(sn$clinical_stage,sn$Cluster)
+sn.tab
+round(prop.table(sn.tab), 2)
+round(prop.table(sn.tab,1),2)
+round(prop.table(sn.tab,2),2)
+#names(sn)
+chisq.test(sn.tab)
+
+
+sn.tab <- table(sn$pathologic_stage,sn$Cluster)
+sn.tab
+round(prop.table(sn.tab), 2)
+round(prop.table(sn.tab,1),2)
+round(prop.table(sn.tab,2),2)
+#names(sn)
+chisq.test(sn.tab)
+
+
+#####
+KTAlcohol <- xtabs(~sn$Cluster+ sn$Alcohol)
+KTAlcohol
+prop.table(KTAlcohol)
+chisq.test(sn$Cluster, sn$Alcohol)
+
+
+KTRadiation <- xtabs(~sn$Cluster+ sn$Radiation)
+KTRadiation
+prop.table(KTRadiation)
+chisq.test(sn$Cluster, sn$Radiation)
+
+
