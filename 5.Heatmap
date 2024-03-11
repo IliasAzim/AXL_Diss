@@ -1,0 +1,104 @@
+library(ComplexHeatmap)
+library(circlize)
+library(RColorBrewer)
+library(tidyverse)
+library(readxl) 
+library(tidyverse)
+library(ComplexHeatmap)
+library(matrixStats)
+library(tidyverse)
+library(pheatmap)
+library(RColorBrewer)
+library(survival)
+library(survminer)
+library(gmodels)
+library(ggplot2)
+#library(DESeq2)
+#library(org.Hs.eg.db)
+library(pheatmap)
+library(circlize) #colours
+
+#BiocManager::install("ComplexHeatmap")
+#install.packages("cluster")
+#install.packages("magick")
+#install.packages("pheatmap")
+library(cluster) 
+
+column_annotations <- read_excel("~/Desktop/Doktorarbeit/AXL/Heatmap/hm_new_try/final_edition/Column_annotation1.xlsx", sheet = 2)
+matrix <- read_excel("~/Desktop/Doktorarbeit/AXL/Heatmap/hm_new_try/final_edition/matrix2.xlsx")
+row_annotations <- read_excel("~/Desktop/Doktorarbeit/AXL/Heatmap/hm_new_try/final_edition/row_annotation1.xlsx", sheet = 1)
+
+heatmap <- matrix %>% 
+  as.data.frame(.)
+row.names(heatmap) <- heatmap$Patients
+heatmap$Patients <- NULL #transpose the matrix, that the patients are in the columns
+heatmap <- as.matrix.data.frame(heatmap)
+heatmap <- log(heatmap+1)
+heatmap <- scale(heatmap)
+
+library(corrplot)
+
+clustering<- hclust<- hclust(as.dist(1-cor(t(heatmap))),method = "average")
+clustering <- hclust(dist(heatmap, method = "euclidean"), method = "ward.D2")
+heatmap <- t(heatmap)
+heatmap <- as.data.frame(heatmap)
+
+#Preparing Annotations
+clinical <- column_annotations %>% # It's a tibble but you want a data frame
+  as.data.frame(.)
+row.names(clinical) <- clinical$Patients
+clinical$Patients <- NULL
+
+clinical_annotations = HeatmapAnnotation(df = clinical,
+                                         which = "column",
+                                         col = list(  
+                                         Cluster = c("A1"="red", "A2" = "yellow", "B1" = "blue", "B2" = "green"),
+                                         AXL= c("high"="red", "low" = "blue", "moderate" = "black"),
+                                         Smoking = c("Yes"="red", "No" = "blue","NA"= "black"),
+                                         HPV16 = c("Negative" = "blue", "Positive" = "red","NA"= "black"), 
+                                         PNI= c("Yes" = "red", "No" = "blue", "NA"= "black"),
+                                         Grading= c("G1-2"="red", "G3-4"="blue", "NA"= "black"),
+                                         cT= c("cT1-2"="red", "cT3-4"="blue", "NA"= "black"),
+                                         pT= c("pT1-2"="red", "pT3-4"="blue", "NA"= "black"),
+                                         annotation_name_side = "right"),
+                                         na_col = "white")
+
+genes_anno <- row_annotations %>%
+  as.data.frame(.)
+row.names(genes_anno) <- genes_anno$Genes
+genes_anno$Genes <- NULL
+
+gene_annotation = HeatmapAnnotation(df = genes_anno,
+                                    which = "row",
+                                    col = list("Regulation"= c("High" = "red", "Low" = "blue")),
+                                    annotation_name_side = "top")
+
+                                                                                                                                                     
+col_rna = colorRamp2(c(-1.7, 0, 1.4), c("#6666FF", "white", "#CC0000"), space = "LAB", transparency = 0)
+
+
+HM_rna <- ComplexHeatmap::Heatmap(heatmap,
+                                  col = col_rna,
+                                  name = "Expression",
+                                  cluster_rows = TRUE,
+                                  row_split = 4,
+                                  clustering_distance_rows = "euclidean",
+                                  clustering_method_rows = "ward.D2",
+                                  row_names_gp = grid::gpar(fontsize=10),
+                                  cluster_columns = clustering,
+                                  column_split = 4,
+                                  column_title =,
+                                  show_column_names = FALSE,
+                                  show_row_names = F, 
+                                  show_row_dend = F,
+                                  use_raster = TRUE, 
+                                  raster_device = "png",
+                                  top_annotation = clinical_annotations, left_annotation = gene_annotation)
+
+tiff(filename = "12new_final_Annot_AXL-Clustering.tiff", width = 32,height = 32,units = "cm",pointsize = 12,res=400)
+draw(HM_rna)
+dev.off()
+
+#draw(HM_rna)
+#dev.print(pdf, "neu1.5_rel.Annot_AXL-Clustering.pdf", width = 8, height = 8)
+
