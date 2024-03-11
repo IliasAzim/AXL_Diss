@@ -1,0 +1,529 @@
+library(survival)
+library(survminer)
+library(readr) 
+library(readxl) 
+library(tidyverse) 
+library(limma)
+library(edgeR) 
+library(AnnotationDbi) 
+library(org.Hs.eg.db) 
+library(ComplexHeatmap)
+library(circlize) 
+library(RColorBrewer)
+
+TCGA_clinicaldata <- read_excel("~/Desktop/Doktorarbeit/Drive-Download/Clinical data/TCGA-HNSC_Master_clinical_data_v1.xlsx", sheet = 2)
+AXL_Lasso <- TCGA_clinicaldata 
+
+AXL_Lasso$OS.time <- AXL_Lasso$OS_5y_months
+AXL_Lasso$OS <- AXL_Lasso$OS_5y_event
+AXL_Lasso$OS_5y_event <- NULL
+AXL_Lasso$OS_5y_months <- NULL
+
+AXL_Lasso <- AXL_Lasso %>%
+  filter(!is.na(AXL_Lasso$OS))
+
+AXL_Lasso <- AXL_Lasso %>%
+  filter(OS == "0"| OS == "1")
+
+AXL_Lasso $OS <- as.numeric(AXL_Lasso $OS)
+
+#------Gender-----
+AXL_Lasso <- TCGA_clinicaldata 
+
+AXL_Lasso$OS.time <- AXL_Lasso$OS_5y_months
+AXL_Lasso$OS <- AXL_Lasso$OS_5y_event
+AXL_Lasso$OS_5y_event <- NULL
+AXL_Lasso$OS_5y_months <- NULL
+
+AXL_Lasso <- AXL_Lasso %>%
+  filter(!is.na(AXL_Lasso$OS))
+
+AXL_Lasso <- AXL_Lasso %>%
+  filter(OS == "0"| OS == "1")
+
+AXL_Lasso$OS <- as.numeric(AXL_Lasso$OS)
+#MALE ist Referenz; also 0. Female ist 1
+
+res.cox <- coxph(Surv(OS.time, OS) ~ Gender, AXL_Lasso)
+res.cox
+
+summary(res.cox)
+
+#---------Age------------
+
+AXL_Lasso <- TCGA_clinicaldata 
+
+AXL_Lasso$OS.time <- AXL_Lasso$OS_5y_months
+AXL_Lasso$OS <- AXL_Lasso$OS_5y_event
+AXL_Lasso$OS_5y_event <- NULL
+AXL_Lasso$OS_5y_months <- NULL
+
+AXL_Lasso <- AXL_Lasso %>%
+  filter(!is.na(AXL_Lasso$OS))
+
+AXL_Lasso <- AXL_Lasso %>%
+  filter(OS == "0"| OS == "1")
+
+AXL_Lasso $OS <- as.numeric(AXL_Lasso $OS)
+
+AXL_Lasso <- AXL_Lasso %>%
+  filter(!is.na(AXL_Lasso$Age))
+
+res.cox <- coxph(Surv(OS.time, OS) ~ Age, AXL_Lasso)
+res.cox
+
+summary(res.cox)
+
+
+#----------tobacco-------
+
+AXL_Lasso <- TCGA_clinicaldata 
+
+AXL_Lasso$OS.time <- AXL_Lasso$OS_5y_months
+AXL_Lasso$OS <- AXL_Lasso$OS_5y_event
+AXL_Lasso$OS_5y_event <- NULL
+AXL_Lasso$OS_5y_months <- NULL
+
+AXL_Lasso <- AXL_Lasso %>%
+  filter(!is.na(AXL_Lasso$OS))
+
+AXL_Lasso <- AXL_Lasso %>%
+  filter(OS == "0"| OS == "1")
+
+AXL_Lasso $OS <- as.numeric(AXL_Lasso $OS)
+
+AXL_Lasso <- AXL_Lasso %>%
+  filter(!is.na(AXL_Lasso$Smoking))
+AXL_Lasso <- AXL_Lasso %>%
+  filter(Smoking == "Yes"| Smoking == "No")
+res.cox <- coxph(Surv(OS.time, OS) ~ Smoking, AXL_Lasso)
+res.cox
+
+summary(res.cox)
+
+#----------ALCOHOL----------------
+
+AXL_Lasso <- TCGA_clinicaldata 
+
+AXL_Lasso$OS.time <- AXL_Lasso$OS_5y_months
+AXL_Lasso$OS <- AXL_Lasso$OS_5y_event
+AXL_Lasso$OS_5y_event <- NULL
+AXL_Lasso$OS_5y_months <- NULL
+
+AXL_Lasso <- AXL_Lasso %>%
+  filter(!is.na(AXL_Lasso$OS))
+
+AXL_Lasso <- AXL_Lasso %>%
+  filter(OS == "0"| OS == "1")
+
+AXL_Lasso $OS <- as.numeric(AXL_Lasso $OS)
+
+AXL_Lasso <- AXL_Lasso %>%
+  filter(!is.na(AXL_Lasso$Alcohol))
+AXL_Lasso <- AXL_Lasso %>%
+  filter(Alcohol == "Yes"| Alcohol == "No")
+res.cox <- coxph(Surv(OS.time, OS) ~ Alcohol, AXL_Lasso)
+res.cox
+
+summary(res.cox)
+
+
+#----------HPV16----------------
+
+AXL_Lasso <- TCGA_clinicaldata 
+
+AXL_Lasso$OS.time <- AXL_Lasso$OS_5y_months
+AXL_Lasso$OS <- AXL_Lasso$OS_5y_event
+AXL_Lasso$OS_5y_event <- NULL
+AXL_Lasso$OS_5y_months <- NULL
+
+AXL_Lasso <- AXL_Lasso %>%
+  filter(!is.na(AXL_Lasso$OS))
+
+AXL_Lasso <- AXL_Lasso %>%
+  filter(OS == "0"| OS == "1")
+
+AXL_Lasso $OS <- as.numeric(AXL_Lasso $OS)
+
+AXL_Lasso <- AXL_Lasso %>%
+  filter(!is.na(AXL_Lasso$HPV16))
+AXL_Lasso <- AXL_Lasso %>%
+  filter(HPV16 == "No"| HPV16 == "Yes")
+res.cox <- coxph(Surv(OS.time, OS) ~ HPV16, AXL_Lasso)
+res.cox
+
+summary(res.cox)
+
+#----------Tumorsize cT----------------
+
+AXL_Lasso <- TCGA_clinicaldata 
+
+AXL_Lasso$OS.time <- AXL_Lasso$OS_5y_months
+AXL_Lasso$OS <- AXL_Lasso$OS_5y_event
+AXL_Lasso$OS_5y_event <- NULL
+AXL_Lasso$OS_5y_months <- NULL
+
+AXL_Lasso <- AXL_Lasso %>%
+  filter(!is.na(AXL_Lasso$OS))
+
+AXL_Lasso <- AXL_Lasso %>%
+  filter(OS == "0"| OS == "1")
+
+AXL_Lasso $OS <- as.numeric(AXL_Lasso $OS)
+
+AXL_Lasso <- AXL_Lasso %>%
+  filter(!is.na(AXL_Lasso$cT))
+
+res.cox <- coxph(Surv(OS.time, OS) ~ cT, AXL_Lasso)
+res.cox
+
+summary(res.cox)
+
+#----------Tumorsize pT----------------
+
+AXL_Lasso <- TCGA_clinicaldata 
+
+AXL_Lasso$OS.time <- AXL_Lasso$OS_5y_months
+AXL_Lasso$OS <- AXL_Lasso$OS_5y_event
+AXL_Lasso$OS_5y_event <- NULL
+AXL_Lasso$OS_5y_months <- NULL
+
+AXL_Lasso <- AXL_Lasso %>%
+  filter(!is.na(AXL_Lasso$OS))
+
+AXL_Lasso <- AXL_Lasso %>%
+  filter(OS == "0"| OS == "1")
+
+AXL_Lasso $OS <- as.numeric(AXL_Lasso $OS)
+
+AXL_Lasso <- AXL_Lasso %>%
+  filter(!is.na(AXL_Lasso$pT))
+
+res.cox <- coxph(Surv(OS.time, OS) ~ pT, AXL_Lasso)
+res.cox
+
+summary(res.cox)
+
+#----------Lymphnodes cN----------------
+
+AXL_Lasso <- TCGA_clinicaldata 
+
+AXL_Lasso$OS.time <- AXL_Lasso$OS_5y_months
+AXL_Lasso$OS <- AXL_Lasso$OS_5y_event
+AXL_Lasso$OS_5y_event <- NULL
+AXL_Lasso$OS_5y_months <- NULL
+
+AXL_Lasso <- AXL_Lasso %>%
+  filter(!is.na(AXL_Lasso$OS))
+
+AXL_Lasso <- AXL_Lasso %>%
+  filter(OS == "0"| OS == "1")
+
+AXL_Lasso $OS <- as.numeric(AXL_Lasso $OS)
+
+AXL_Lasso <- AXL_Lasso %>%
+  filter(!is.na(AXL_Lasso$cN))
+
+res.cox <- coxph(Surv(OS.time, OS) ~ cN, AXL_Lasso)
+res.cox
+
+summary(res.cox)
+
+#----------Lymphnodes pN----------------
+
+AXL_Lasso <- TCGA_clinicaldata 
+
+AXL_Lasso$OS.time <- AXL_Lasso$OS_5y_months
+AXL_Lasso$OS <- AXL_Lasso$OS_5y_event
+AXL_Lasso$OS_5y_event <- NULL
+AXL_Lasso$OS_5y_months <- NULL
+
+AXL_Lasso <- AXL_Lasso %>%
+  filter(!is.na(AXL_Lasso$OS))
+
+AXL_Lasso <- AXL_Lasso %>%
+  filter(OS == "0"| OS == "1")
+
+AXL_Lasso $OS <- as.numeric(AXL_Lasso $OS)
+
+AXL_Lasso <- AXL_Lasso %>%
+  filter(!is.na(AXL_Lasso$pN))
+
+res.cox <- coxph(Surv(OS.time, OS) ~ pN, AXL_Lasso)
+res.cox
+
+summary(res.cox)
+
+
+#----------Grading----------------
+
+AXL_Lasso <- TCGA_clinicaldata 
+
+AXL_Lasso$OS.time <- AXL_Lasso$OS_5y_months
+AXL_Lasso$OS <- AXL_Lasso$OS_5y_event
+AXL_Lasso$OS_5y_event <- NULL
+AXL_Lasso$OS_5y_months <- NULL
+
+AXL_Lasso <- AXL_Lasso %>%
+  filter(!is.na(AXL_Lasso$OS))
+
+AXL_Lasso <- AXL_Lasso %>%
+  filter(OS == "0"| OS == "1")
+
+AXL_Lasso $OS <- as.numeric(AXL_Lasso $OS)
+
+AXL_Lasso <- AXL_Lasso %>%
+  filter(!is.na(AXL_Lasso$Grading))
+
+res.cox <- coxph(Surv(OS.time, OS) ~ Grading, AXL_Lasso)
+res.cox
+
+summary(res.cox)
+
+
+
+#----------margin_status----------------
+
+AXL_Lasso <- TCGA_clinicaldata 
+
+AXL_Lasso$OS.time <- AXL_Lasso$OS_5y_months
+AXL_Lasso$OS <- AXL_Lasso$OS_5y_event
+AXL_Lasso$OS_5y_event <- NULL
+AXL_Lasso$OS_5y_months <- NULL
+
+AXL_Lasso <- AXL_Lasso %>%
+  filter(!is.na(AXL_Lasso$OS))
+
+AXL_Lasso <- AXL_Lasso %>%
+  filter(OS == "0"| OS == "1")
+
+AXL_Lasso $OS <- as.numeric(AXL_Lasso $OS)
+
+AXL_Lasso <- AXL_Lasso %>%
+  filter(!is.na(AXL_Lasso$margin_status))
+
+res.cox <- coxph(Surv(OS.time, OS) ~ margin_status, AXL_Lasso)
+res.cox
+
+summary(res.cox)
+
+#----------ALI-------
+
+AXL_Lasso <- TCGA_clinicaldata 
+
+AXL_Lasso$OS.time <- AXL_Lasso$OS_5y_months
+AXL_Lasso$OS <- AXL_Lasso$OS_5y_event
+AXL_Lasso$OS_5y_event <- NULL
+AXL_Lasso$OS_5y_months <- NULL
+
+AXL_Lasso <- AXL_Lasso %>%
+  filter(!is.na(AXL_Lasso$OS))
+
+AXL_Lasso <- AXL_Lasso %>%
+  filter(OS == "0"| OS == "1")
+
+AXL_Lasso $OS <- as.numeric(AXL_Lasso $OS)
+
+AXL_Lasso <- AXL_Lasso %>%
+  filter(!is.na(AXL_Lasso$ALI))
+AXL_Lasso <- AXL_Lasso %>%
+  filter(ALI == "Yes"| ALI == "No")
+res.cox <- coxph(Surv(OS.time, OS) ~ ALI, AXL_Lasso)
+res.cox
+
+summary(res.cox)
+
+
+#----------PNI-------
+
+AXL_Lasso <- TCGA_clinicaldata 
+
+AXL_Lasso$OS.time <- AXL_Lasso$OS_5y_months
+AXL_Lasso$OS <- AXL_Lasso$OS_5y_event
+AXL_Lasso$OS_5y_event <- NULL
+AXL_Lasso$OS_5y_months <- NULL
+
+AXL_Lasso <- AXL_Lasso %>%
+  filter(!is.na(AXL_Lasso$OS))
+
+AXL_Lasso <- AXL_Lasso %>%
+  filter(OS == "0"| OS == "1")
+
+AXL_Lasso $OS <- as.numeric(AXL_Lasso $OS)
+
+AXL_Lasso <- AXL_Lasso %>%
+  filter(!is.na(AXL_Lasso$PNI))
+AXL_Lasso <- AXL_Lasso %>%
+  filter(PNI == "Yes"| PNI == "No")
+res.cox <- coxph(Surv(OS.time, OS) ~ PNI, AXL_Lasso)
+res.cox
+
+summary(res.cox)
+
+
+#-------Radiation-----
+
+AXL_Lasso <- TCGA_clinicaldata 
+
+AXL_Lasso$OS.time <- AXL_Lasso$OS_5y_months
+AXL_Lasso$OS <- AXL_Lasso$OS_5y_event
+AXL_Lasso$OS_5y_event <- NULL
+AXL_Lasso$OS_5y_months <- NULL
+
+AXL_Lasso <- AXL_Lasso %>%
+  filter(!is.na(AXL_Lasso$OS))
+
+AXL_Lasso <- AXL_Lasso %>%
+  filter(OS == "0"| OS == "1")
+
+AXL_Lasso $OS <- as.numeric(AXL_Lasso $OS)
+
+AXL_Lasso <- AXL_Lasso %>%
+  filter(!is.na(AXL_Lasso$Radiation))
+AXL_Lasso <- AXL_Lasso %>%
+  filter(Radiation == "Yes"| Radiation == "No")
+res.cox <- coxph(Surv(OS.time, OS) ~ Radiation, AXL_Lasso)
+res.cox
+
+summary(res.cox)
+
+
+#------high and low risk------------
+
+RiskScore <- read_excel("~/Desktop/Doktorarbeit/AXL/LassoCox/Maxstatlasso-Risk DSS_OS_PFI.xlsx", sheet = 2)
+
+res.cox <- coxph(Surv(OS.time, OS) ~ risk, RiskScore)
+res.cox
+
+summary(res.cox)
+
+#immer das was da nicht steht, ist referenz
+#siehe gruppe, referenz korrekt definieren
+
+#n>400, nur bei ali u pni nicht korrekt
+
+#------OS_5y mit Endpunkt DSS_5y------------
+AXL_Lasso <- TCGA_clinicaldata 
+
+RiskScore <- read_excel("~/Desktop/Doktorarbeit/AXL/LassoCox/Maxstatlasso-Risk DSS_OS_PFI.xlsx", sheet = 2)
+
+AXL_Lasso <- AXL_Lasso %>%
+  filter(!is.na(AXL_Lasso$DSS))
+
+AXL_Lasso <- AXL_Lasso %>%
+  filter(DSS == "0"| DSS == "1")
+
+AXL_Lasso $DSS_5y_event <- as.numeric(AXL_Lasso $DSS_5y_event)
+
+AXL_Lasso<- AXL_Lasso%>%
+  filter(AXL_Lasso$Patient_ID %in% RiskScore$Patient_ID)
+
+
+AXL_Lasso <- left_join(RiskScore, AXL_Lasso, by = "Patient_ID") #adding to your clinicaldata
+AXL_Lasso$DSS.time <- AXL_Lasso$DSS_5y_months
+AXL_Lasso$DSSe <- AXL_Lasso$DSS_5y_event
+#PTGS_lasso$DSS_5y_event <- NULL
+AXL_Lasso$DSS_5y_months <- NULL
+
+res.cox <- coxph(Surv(DSS.time, DSSe) ~ risk, AXL_Lasso)
+res.cox
+
+summary(res.cox)
+
+#------OS_5y mit Endpunkt PFI------------
+AXL_Lasso <- TCGA_clinicaldata 
+
+RiskScore <- read_excel("~/Desktop/Doktorarbeit/AXL/LassoCox/Maxstatlasso-Risk DSS_OS_PFI.xlsx", sheet = 2)
+
+AXL_Lasso <- AXL_Lasso %>%
+  filter(!is.na(AXL_Lasso$PFI_months))
+
+AXL_Lasso <- AXL_Lasso %>%
+  filter(PFI == "0"| PFI == "1")
+AXL_Lasso $PFI <- as.numeric(AXL_Lasso $PFI)
+
+AXL_Lasso<- AXL_Lasso%>%
+  filter(AXL_Lasso$Patient_ID %in% RiskScore$Patient_ID)
+
+AXL_Lasso <- left_join(RiskScore, AXL_Lasso, by = "Patient_ID") #adding to your clinicaldata
+AXL_Lasso$PFI.time <- AXL_Lasso$PFI_months
+AXL_Lasso$PFIe <- AXL_Lasso$PFI
+#PTGS_lasso$DSS_5y_event <- NULL
+#AXL_Lasso$PFI_5y_event <- NULL
+AXL_Lasso $PFI.time <- as.numeric(AXL_Lasso $PFI.time)
+AXL_Lasso $PFIe <- as.numeric(AXL_Lasso $PFIe)
+res.cox <- coxph(Surv(PFI.time, PFIe) ~ risk, AXL_Lasso)
+res.cox
+
+summary(res.cox)
+
+
+
+#------OS_5y mit Endpunkt OS------------
+AXL_Lasso <- TCGA_clinicaldata 
+
+RiskScore <- read_excel("~/Desktop/Doktorarbeit/AXL/LassoCox/Maxstatlasso-Risk DSS_OS_PFI.xlsx", sheet = 2)
+
+AXL_Lasso <- AXL_Lasso %>%
+  filter(!is.na(AXL_Lasso$OS))
+
+AXL_Lasso <- AXL_Lasso %>%
+  filter(OS == "0"| OS == "1")
+
+AXL_Lasso $OS <- as.numeric(AXL_Lasso $OS)
+
+AXL_Lasso<- AXL_Lasso%>%
+  filter(AXL_Lasso$Patient_ID %in% RiskScore$Patient_ID)
+
+AXL_Lasso <- left_join(RiskScore, AXL_Lasso, by = "Patient_ID") #adding to your clinicaldata
+AXL_Lasso$OS.time <- AXL_Lasso$OS_days
+AXL_Lasso$OSe <- AXL_Lasso$OS 
+#PTGS_lasso$DSS_5y_event <- NULL
+#AXL_Lasso$PFI_5y_event <- NULL
+AXL_Lasso $OS.time <- as.numeric(AXL_Lasso $OS.time)
+AXL_Lasso $OSe <- as.numeric(AXL_Lasso $OSe)
+res.cox <- coxph(Surv(OS.time, OSe) ~ risk, AXL_Lasso)
+res.cox
+
+summary(res.cox)
+
+
+
+#------------MULTIVARIAT------
+
+
+AXL_Lasso <- TCGA_clinicaldata 
+
+AXL_Lasso$OS.time <- AXL_Lasso$OS_5y_months
+AXL_Lasso$OS <- AXL_Lasso$OS_5y_event
+AXL_Lasso$OS_5y_event <- NULL
+AXL_Lasso$OS_5y_months <- NULL
+AXL_Lasso <- AXL_Lasso %>%
+  filter(!is.na(AXL_Lasso$OS))
+
+AXL_Lasso <- AXL_Lasso %>%
+  filter(OS == "0"| OS == "1")
+
+AXL_Lasso $OS <- as.numeric(AXL_Lasso $OS)
+
+RiskScore <- RiskScore %>% 
+  dplyr::select(Patient_ID, risk)
+
+AXL_Lasso <- left_join(RiskScore, AXL_Lasso, by = "Patient_ID") #adding to your clinicaldata
+
+AXL_Lasso <- AXL_Lasso %>%
+  filter(!is.na(AXL_Lasso$HPV16))
+AXL_Lasso <- AXL_Lasso %>%
+  filter(HPV16 == "No"| HPV16 == "Yes")
+
+res.cox <- coxph(Surv(OS.time, OS) ~Gender + Age + HPV16 + pT + pN + margin_status + ALI + PNI + Radiation + risk, AXL_Lasso)
+summary(res.cox)
+
+
+risk_df <- with(AXL_Lasso,
+                data.frame(risk = c("low", "high")
+                )
+)
+risk_df
+
+
