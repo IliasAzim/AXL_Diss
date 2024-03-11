@@ -1,0 +1,86 @@
+library("glmnet")
+library("survival")
+library(readr) 
+library(readxl) 
+library(tidyverse) 
+library(limma) 
+library(edgeR) 
+library(AnnotationDbi) 
+library(org.Hs.eg.db) 
+library(ComplexHeatmap) 
+library(circlize) 
+library(RColorBrewer) 
+
+TCGA_clinicaldata <- read_excel("~/Desktop/Doktorarbeit/Drive-Download/Clinical data/TCGA-HNSC_Master_clinical_data_v1.xlsx", sheet = 2)
+AXL_lasso <- TCGA_clinicaldata %>%
+  dplyr::select(Patient_ID, OS_5y_event, OS_5y_months)
+
+AXL_lasso$OS.time <- AXL_lasso$OS_5y_months
+AXL_lasso$OS <- AXL_lasso$OS_5y_event
+AXL_lasso$OS_5y_event <- NULL
+AXL_lasso$OS_5y_months <- NULL
+
+AXL_lasso <- AXL_lasso %>%
+  filter(!is.na(AXL_lasso$OS.time))
+
+TCGA_HNSC_GDCHarmonized_HTSeqFPKM <- read_delim("~/Desktop/Doktorarbeit/NewTry/TCGA_HNSC_GDCHarmonized_HTSeqFPKM.txt", "\t", escape_double = FALSE, trim_ws = TRUE) # FPKM data
+GeneID_overlap <- read_excel("~/Desktop/Doktorarbeit/AXL/TCGA_FPKM_mygene.xlsx", sheet = 2)
+
+fpkm_data <- TCGA_HNSC_GDCHarmonized_HTSeqFPKM %>% 
+  filter(TCGA_HNSC_GDCHarmonized_HTSeqFPKM$Entrez_Gene_ID %in% GeneID_overlap$GeneID_all) %>%
+  as.data.frame(.)
+
+colnames(fpkm_data) <- gsub("-01","",colnames(fpkm_data), fixed=TRUE)
+rownames(fpkm_data) <- fpkm_data$Entrez_Gene_ID 
+fpkm_data$Entrez_Gene_ID <- NULL
+fpkm_data <- t(fpkm_data)
+fpkm_data <- as.data.frame(fpkm_data)
+fpkm_data$Patient_ID <- c(rownames(fpkm_data))
+
+AXL_lasso <- left_join(AXL_lasso, fpkm_data, by = "Patient_ID") #adding to your clinicaldata
+rt <- AXL_lasso
+rt=rt%>%
+  filter(!is.na(rt$'558'))
+  
+rt$OS <- as.numeric(rt$OS)
+
+x=as.matrix(rt[,c(4:ncol(rt))])
+y=data.matrix(Surv(rt$OS.time,rt$OS))
+
+fit <- glmnet(x, y, family = "cox", maxit = 1e+9)
+plot(fit, xvar = "lambda", label = FALSE, lw=2)
+
+cvfit <- cv.glmnet(x, y, family="cox", lambda = NULL)
+abline(v=log(c(cvfit$lambda.min,cvfit$lambda.1se)),lty="dashed")
+plot(cvfit)
+
+coef <- coef(fit, s = cvfit$lambda.min)
+index <- which(coef != 0)
+actCoef <- coef[index]
+lassoGene=row.names(coef)[index]
+geneCoef=cbind(Gene=lassoGene,Coef=actCoef)
+write.table(geneCoef,file="geneCoefallgenes.txt",sep="\t",quote=F,row.names=F)
+
+riskScore=predict(cvfit, newx = x, s = "lambda.min",type="response")
+outCol=c("OS.time","OS",lassoGene)
+outTab=cbind(rt[,outCol],riskScore=as.vector(riskScore), rt$Patient_ID)
+write.table(cbind(Patient_ID=rownames(outTab),outTab),
+            file="OS_5y-lassoRisk.txt",
+            sep="\t",
+            quote=F,
+            row.names=F)
+
+###################################################best cutoff
+library(maxstat)
+library(survival)
+stat <- maxstat.test(Surv(outTab$OS.time,outTab$OS)~outTab$riskScore, data = outTab, smethod="LogRank",pmethod="exactGauss", abseps=0.01)
+cutoff<-stat$estimate
+risk=as.vector(ifelse(riskScore>cutoff,"high","low"))
+write.table(cbind(Patient_ID=rownames(outTab),outTab,risk),
+            file="OS_5y-MaxstatlassoRisk.txt",
+            sep="\t",
+            quote=F,
+            row.names=F)
+
+
+
