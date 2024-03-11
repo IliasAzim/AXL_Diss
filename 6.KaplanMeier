@@ -1,0 +1,182 @@
+#Heatmap and Clustering
+library(readr) #import txt
+library(readxl) #import excel
+library(tidyverse) # data manipulation
+library(limma) # DEG
+library(edgeR) # DEG
+library(AnnotationDbi) # Converting Entrez Gene ID to Symbol
+library(org.Hs.eg.db) # Converting Entrez Gene ID to Symbol
+library(ComplexHeatmap) #Making the Heatmap
+library(circlize) #colours
+library(RColorBrewer) # colours
+library(survival)
+library(survminer)
+library(dplyr)
+
+#import Dataset
+Counts <- read_delim("~/Desktop/Doktorarbeit/NewTry/TCGA_HNSC_GDCHarmonized_HTSeqCounts.txt", "\t", escape_double = FALSE, trim_ws = TRUE) # Count data
+FPKM <- read_delim("~/Desktop/Doktorarbeit/NewTry/TCGA_HNSC_GDCHarmonized_HTSeqFPKM.txt", "\t", escape_double = FALSE, trim_ws = TRUE) # FPKM data
+
+#import Excel table for overlapping genes
+GeneID_overlap <- read_excel("~/Desktop/Doktorarbeit/AXL/TCGA_FPKM_mygene.xlsx", sheet = 2)
+
+#create data frame from excel
+GeneID_overlap <- as.data.frame(GeneID_overlap)
+
+
+AXL <- tibble(Patient_ID = str_replace_all(colnames(FPKM),"-01$", ""),
+               "558" = FPKM %>% 
+                 filter(Entrez_Gene_ID == 558) %>%
+                 t(.),
+               Sample_ID = colnames(FPKM)) 
+
+
+AXL <- mutate(AXL, Group = case_when(`558` >= quantile(`558`, probs = 0.75, na.rm = T)~ "high", 
+                                       `558` > quantile(`558`, probs = 0.25, na.rm = T) & `558` < quantile(`558`, probs = 0.75, na.rm = T) ~"moderate",
+                                       `558` <= quantile(`558`, probs = 0.25, na.rm = T)~ "low"))
+
+
+#Clustering======
+heatmap <- FPKM%>%
+  filter(FPKM$Entrez_Gene_ID %in% GeneID_overlap$GeneID_all) #mit diesem Filter werden die relevanten Gene von GeneID_all aus dem FPKM Datensatz rausgeholt
+
+colnames(heatmap) <- gsub("-01", "", colnames(heatmap), fixed = T)
+row.names(heatmap) <- heatmap$Entrez_Gene_ID #save genes as row names
+heatmap <- as.data.frame(heatmap)
+heatmap[1] <- NULL
+heatmap <- as.matrix.data.frame(heatmap)
+
+# converting to a data frame
+
+#Ln+1 Transformation auf die Daten anwenden
+heatmap <- log(heatmap+1)
+heatmap <- scale(t(heatmap), center = T, scale = T) #subtracting mean and dividing with SD
+
+write.table(heatmap, "heatmap_clustvis.txt", sep="\t", row.names=FALSE, na="")
+
+clustering <- hclust(dist(heatmap, method = "euclidean"), method = "ward.D2") #defining Clustering distance and Clustering method
+t <- cutree(clustering, 4) # number of Cluster
+
+
+
+cluster <- as.data.frame(t) 
+cluster$Patient_ID <- as.factor(rownames(cluster))
+cluster <- cluster %>%
+  dplyr::rename(`Cluster` = `t`)
+
+# Füge die Clinicaldata mit dem Cluster zusammen
+TCGA_clinicaldata <- read_excel("~/Desktop/Doktorarbeit/Drive-Download/Clinical data/TCGA-HNSC_Master_clinical_data_v1.xlsx", sheet = 4)
+TCGA_clinicaldata <- left_join(cluster, TCGA_clinicaldata, by = "Patient_ID") #adding to your clinicaldata
+write.table(TCGA_clinicaldata, "TCGA_clinicaldata.txt", sep="\t", row.names=FALSE, na="")
+
+#jetzt joine die neuen Data mit axl
+AXL[2:3] <- NULL 
+TCGA_clinicaldata <- left_join(AXL, TCGA_clinicaldata, by = "Patient_ID") #adding to your clinicaldata
+
+#Annotations========
+
+clinical <- TCGA_clinicaldata %>%
+  filter(!is.na(TCGA_clinicaldata$Cluster)) %>% #selecting only cases where RNA-Seq/Cluster data is available
+  dplyr::select(DSS_5y_event, DSS_5y_months,Cluster) %>% # selecting your annotations
+  as.data.frame(.) #data frame
+write.table(clinical, "clinicalPFI.txt", sep="\t", row.names=FALSE, na="")
+
+clinicalpfi <- read_delim("~/Desktop/clinicalPFI.txt", "\t", escape_double = FALSE, trim_ws = TRUE) # Count data
+
+KM <- survfit(Surv(DSS_5y_event,DSS_5y_months) ~ Cluster, data = clinicalpfi)
+
+plot(KM, 
+     conf.int=FALSE,
+     xlab = "OS_5y_months",ylab = "Survival Rate",
+     yscale = 100,
+     las=1,
+     lwd=2,
+     col =c("red1","blue","green","yellow"))
+
+legend("topright",                                      #man kann auch Koordinaten angeben wie (18, 0.95) oder "bottomleft"
+       title= "Clusters",
+       legend=c("1","2","3","4"),
+       col = c("red1","blue","green","yellow"),  #man kann auch die Linien zeichnen lassen mit fill/col=c("red1", "blue"...)
+       lty=1,
+       lwd=4,
+       bty = "",
+       cex=0.3)
+
+#abline(h=0.5, col="red")
+
+survdiff(Surv(as.numeric(OS_5y_months,OS_5y_event)) ~ Cluster,data = clinical)
+
+d <- data.frame(time = KM$time, n.risk = KM$n.risk, n.event = KM$n.event,  n.censor = KM$n.censor, surv = KM$surv,upper = KM$upper, lower = KM$lower)
+head(d)
+
+
+#?ggsurvplot
+ggsurvplot(KM,
+           risk.table = TRUE, risk.table.title="", risk.table.y.text=TRUE,
+           break.y.by=0.2,
+           pval = TRUE, pval.method = TRUE,
+           palette= c("red1", "blue", "green", "yellow"), 
+           legend=c("none"), xlab="OS_5y_event_5y_months", ylab= "Survival Rate",
+           legend.labs = c("1", "2", "3", "4"), legend.title="",
+           risk.table.height = 0.2)
+tiff(filename = "KM_AXL_OS-5y.tiff",width = 4,height = 4,units = "cm",pointsize = 6,res=400)
+
+
+#########
+#DSS:
+
+# Füge die Clinicaldata mit dem Cluster zusammen
+TCGA_clinicaldata <- read_excel("~/Desktop/Doktorarbeit/Drive-Download/Clinical data/TCGA-HNSC_Master_clinical_data_v1.xlsx", sheet = 4)
+TCGA_clinicaldata <- left_join(cluster, TCGA_clinicaldata, by = "Patient_ID") #adding to your clinicaldata
+write.table(TCGA_clinicaldata, "TCGA_clinicaldata.txt", sep="\t", row.names=FALSE, na="")
+
+#jetzt joine die neuen Data mit axl
+AXL[2:3] <- NULL 
+TCGA_clinicaldata <- left_join(AXL, TCGA_clinicaldata, by = "Patient_ID") #adding to your clinicaldata
+
+clinical <- TCGA_clinicaldata %>%
+  filter(!is.na(TCGA_clinicaldata$Cluster)) %>% #selecting only cases where RNA-Seq/Cluster data is available
+  dplyr::select(DSS_5y_event, DSS_5y_months,Cluster) %>% # selecting your annotations
+  as.data.frame(.) #data frame
+
+
+KM <- survfit( Surv(DSS_5y_event, DSS_5y_months) ~ Cluster, data = clinical)
+
+
+plot(KM, 
+     conf.int=FALSE,
+     xlab = "DSS_5y_months",ylab = "Survival Rate",
+     yscale = 100,
+     las=1,
+     lwd=2,
+     col =c("red1","blue","green","yellow"))
+
+legend("topright",                                      #man kann auch Koordinaten angeben wie (18, 0.95) oder "bottomleft"
+       title= "Clusters",
+       legend=c("1","2","3","4"),
+       col = c("red1","blue","green","yellow"),  #man kann auch die Linien zeichnen lassen mit fill/col=c("red1", "blue"...)
+       lty=1,
+       lwd=4,
+       bty = "",
+       cex=0.3)
+
+#abline(h=0.5, col="red")
+
+survdiff(Surv(as.numeric(DSS_5y_event, DSS_5y_months)) ~ Cluster,data = clinical)
+
+d <- data.frame(time = KM$time, n.risk = KM$n.risk, n.event = KM$n.event,  n.censor = KM$n.censor, surv = KM$surv,upper = KM$upper, lower = KM$lower)
+head(d)
+
+
+#?ggsurvplot
+ggsurvplot(KM,
+           risk.table = TRUE, risk.table.title="", risk.table.y.text=TRUE,
+           break.y.by=0.2,
+           pval = TRUE, pval.method = TRUE,
+           palette= c("red1", "blue", "green", "yellow"), 
+           legend=c("none"), xlab="DSS_5y_event_5y_months", ylab= "Survival Rate",
+           legend.labs = c("1", "2", "3", "4"), legend.title="",
+           risk.table.height = 0.2)
+tiff(filename = "KM_AXL_DSS-5y.tiff",width = 4,height = 4,units = "cm",pointsize = 6,res=400)
+
+
