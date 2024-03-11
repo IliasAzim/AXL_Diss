@@ -1,0 +1,98 @@
+library(tidyverse)
+library(gridExtra)
+library(futile.logger)
+library(VennDiagram)
+library(grid)
+library(RColorBrewer)
+library(AnnotationDbi)
+library(org.Hs.eg.db)
+library(readr)
+library(eulerr)
+library(clusterProfiler)
+library(enrichplot)
+library(ggplot2)
+library(readxl) 
+library(read_excel)
+if (!require("BiocManager", quietly = TRUE))
+  install.packages("BiocManager")
+
+temp <- read_excel("~/Desktop/Doktorarbeit/AXL/2.deseq2/AXL_Deseq_V1.xlsx")
+
+temp <- temp %>%
+  #dplyr::filter(ID %in% GeneID_all, log2FoldChange) %>%
+  arrange(desc(log2FoldChange))
+gsea_genelist <- temp$log2FoldChange
+names(gsea_genelist) <- (temp$GeneID_all)
+
+H_sig <- read.gmt("~/Desktop/Doktorarbeit/AXL/GSEA/gseaR/Downloads/h.all.v7.4.entrez.gmt.txt")
+c1_sig <- read.gmt("~/Desktop/Doktorarbeit/AXL/GSEA/gseaR/Downloads/c1.all.v7.4.entrez.gmt.txt")
+c2_biocarta_sig <- read.gmt("~/Desktop/Doktorarbeit/AXL/GSEA/gseaR/Downloads/c2.cp.biocarta.v7.4.entrez.gmt.txt")
+c2_kegg_sig <- read.gmt("~/Desktop/Doktorarbeit/AXL/GSEA/gseaR/Downloads/c2.cp.kegg.v7.4.entrez.gmt.txt")
+c2_pid_sig <- read.gmt("~/Desktop/Doktorarbeit/AXL/GSEA/gseaR/Downloads/c2.cp.pid.v7.4.entrez.gmt.txt")
+c2_reactome_sig <- read.gmt("~/Desktop/Doktorarbeit/AXL/GSEA/gseaR/Downloads/c2.cp.reactome.v7.4.entrez.gmt.txt")
+c2_wikipathways_sig <- read.gmt(("~/Desktop/Doktorarbeit/AXL/GSEA/gseaR/Downloads/c2.cp.wikipathways.v7.4.entrez.gmt.txt"))
+c3tft_sig <- read.gmt("~/Desktop/Doktorarbeit/AXL/GSEA/gseaR/Downloads/c3.all.v7.4.entrez.gmt.txt")
+c5_sig <- read.gmt("~/Desktop/Doktorarbeit/AXL/GSEA/gseaR/Downloads/c5.all.v7.4.entrez.gmt.txt")
+c5_bp_sig <- read.gmt("~/Desktop/Doktorarbeit/AXL/GSEA/gseaR/Downloads/c5.go.bp.v7.4.entrez.gmt.txt")
+c5_cc_sig <- read.gmt("~/Desktop/Doktorarbeit/AXL/GSEA/gseaR/Downloads/c5.go.cc.v7.4.entrez.gmt.txt")
+c5_mf_sig <- read.gmt("~/Desktop/Doktorarbeit/AXL/GSEA/gseaR/Downloads/c5.go.mf.v7.4.entrez.gmt.txt")
+c6_sig <- read.gmt("~/Desktop/Doktorarbeit/AXL/GSEA/gseaR/Downloads/c6.all.v7.4.entrez.gmt.txt")
+c7_sig <- read.gmt("~/Desktop/Doktorarbeit/AXL/GSEA/gseaR/Downloads/c7.all.v7.4.entrez.gmt.txt") 
+c8_sig <- read.gmt("~/Desktop/Doktorarbeit/AXL/GSEA/gseaR/Downloads/c8.all.v7.4.entrez.gmt.txt")
+
+H_sig <- read.gmt("~/Desktop/Doktorarbeit/AXL/GSEA/gseaR/Downloads/h.all.v2023.1.Hs.entrez.gmt.txt")
+sig <- read.gmt("~/Desktop/Doktorarbeit/AXL/GSEA/gseaR/Downloads/h.all.v2023.1.Hs.entrez.gmt.txt")
+
+sig <- rbind(H_sig,c2_biocarta_sig,c2_kegg_sig,H_sig,c2_pid_sig,c2_reactome_sig, c2_wikipathways_sig, c6_sig)#
+geneset_gsea_Sep6  <- GSEA(geneList = gsea_genelist, exponent = 1, nPerm=1000, minGSSize = -100,
+                      maxGSSize = 1000, pvalueCutoff = 0.01, pAdjustMethod = "none",
+                      TERM2GENE = sig, TERM2NAME = NA, verbose = TRUE, seed = FALSE,
+                      by = "fgsea")
+
+tiff(filename = "geneset_gsea_Sep6.tiff", width = 25, height = 25, units = "cm", pointsize = 50, res = 100)
+enrichplot::dotplot(geneset_gsea_Sep6, x = "NES", showCategory=20,  orderBy = "x", color= "pvalue", font.size = 15)
+dev.off()
+
+#GO analysis=========
+#c5_bp_sig <- read.gmt("~/Desktop/Doktorarbeit/AXL/GSEA/gseaR/Downloads/c5.bp.v7.1.entrez.gmt.txt")
+tempPos <- read_excel("~/Desktop/Doktorarbeit/AXL/2.deseq2/AXL_Deseq_V1.xlsx", sheet = 3)
+
+go_up <- tempPos %>%
+  dplyr::select(GeneID_all, log2FoldChange)
+
+GO_DEG_up_Sep5 <- enricher(as.vector(go_up$GeneID_all), pvalueCutoff = 0.05, pAdjustMethod = "BH", universe = tempPos$GeneID_all,
+                      minGSSize = 0, maxGSSize = 500, qvalueCutoff = 0.5, TERM2GENE = H_sig,
+                      TERM2NAME = NA)
+tiff(filename = "GO_DEG_up_Sep5.tiff", width = 35, height = 10, units = "cm", pointsize = 12, res = 75)
+#enrichplot::dotplot(GO_DEG_up_Sep3, x = "NES", showCategory=50,  orderBy = "x", color= "pvalue", font.size = 12)
+barplot(GO_DEG_up_Sep5, showCategory=10, font.size = 15)
+dev.off()
+
+tempNeg <- read_excel("~/Desktop/Doktorarbeit/AXL/2.deseq2/AXL_Deseq_V1.xlsx", sheet = 2)
+
+go_down <- tempNeg %>%
+  dplyr::select(GeneID_all,log2FoldChange)
+
+GO_DEG_down2 <- enricher(as.vector(go_down$GeneID_all), pvalueCutoff = 0.05, pAdjustMethod = "BH", universe = tempPos$GeneID_all,
+                        minGSSize = 0, maxGSSize = 500, qvalueCutoff = 0.5, TERM2GENE = c5_bp_sig,
+                        TERM2NAME = NA)
+tiff(filename = "GO_DEG_down2.tiff", width = 35, height = 10, units = "cm", pointsize = 12, res = 75)
+barplot(GO_DEG_down2,x = 'Count' ,showCategory=10, font.size = 15)
+dev.off()
+
+temp <- temp %>%
+  #dplyr::filter(ID %in% GeneID_all, log2FoldChange) %>%
+  arrange(desc(log2FoldChange))
+gsea_genelist <- temp$log2FoldChange
+names(gsea_genelist) <- (temp$GeneID_all)
+
+sig <- rbind(c2_biocarta_sig,c2_kegg_sig,H_sig,c2_pid_sig,c2_reactome_sig)
+#sig <- rbind(c2_kegg_sig,H_sig)
+gs_gsea_H2  <- GSEA(geneList = gsea_genelist, exponent = 1, nPerm = 1000, minGSSize = -1,
+                   maxGSSize = 1000, pvalueCutoff = 0.01, pAdjustMethod = "none",
+                   TERM2GENE =sig, TERM2NAME = NA, verbose = TRUE, seed = FALSE,
+                   by = "fgsea")
+tiff(filename = "gs_gsea_H2.tiff", width = 25, height = 25, units = "cm", pointsize = 12, res = 75)
+enrichplot::dotplot(gs_gsea_H2, x = "NES", showCategory=50,  orderBy = "x", color= "pvalue", font.size = 8)
+dev.off()
+
