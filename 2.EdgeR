@@ -1,0 +1,208 @@
+library(readr)
+library(edgeR)
+library(limma)
+library(dplyr)
+library(Biobase)
+library(readr) 
+library(readxl) 
+library(tidyverse) 
+library(AnnotationDbi) 
+library(org.Hs.eg.db) 
+
+TCGA_HNSC_GDCHarmonized_HTSeqFPKM <- read_delim("~/Desktop/Doktorarbeit/NewTry/TCGA_HNSC_GDCHarmonized_HTSeqFPKM.txt", "\t", escape_double = FALSE, trim_ws = TRUE) # FPKM data
+
+TCGA_HNSC_GDCHarmonized_HTSeqCounts <- read_delim("~/Desktop/Doktorarbeit/NewTry/TCGA_HNSC_GDCHarmonized_HTSeqCounts.txt", "\t", escape_double = FALSE, trim_ws = TRUE) # Count data
+
+AXL <- tibble(Patient_ID = str_replace_all(colnames(TCGA_HNSC_GDCHarmonized_HTSeqFPKM),"-01$", ""),
+              "558" = TCGA_HNSC_GDCHarmonized_HTSeqFPKM %>% 
+                filter(Entrez_Gene_ID == 558) %>%
+                t(.),
+              Sample_ID = colnames(TCGA_HNSC_GDCHarmonized_HTSeqFPKM)) 
+
+
+AXL <- mutate(AXL, Group = case_when(`558` >= quantile(`558`, probs = 0.75, na.rm = T)~ "high", 
+                                     `558` > quantile(`558`, probs = 0.25, na.rm = T) & `558` < quantile(`558`, probs = 0.75, na.rm = T) ~"moderate",
+                                     `558` <= quantile(`558`, probs = 0.25, na.rm = T)~ "low"))
+
+exprSet <- TCGA_HNSC_GDCHarmonized_HTSeqCounts %>% # For DEG use counts 
+  as.data.frame(.)
+rownames(exprSet) <- exprSet$Entrez_Gene_ID
+exprSet$Entrez_Gene_ID <- NULL
+
+temp <- AXL %>%
+  dplyr::select(Sample_ID, Group)
+temp <- as.data.frame(colnames(exprSet)) %>%
+  left_join(.,temp, by = c("colnames(exprSet)" = "Sample_ID")) %>%
+  na.omit(.)
+
+x <- DGEList(counts = exprSet, group = temp$Group, remove.zeros = FALSE)
+
+
+design <- model.matrix(~0+x$samples$group)
+colnames(design) <- gsub("x$samples$group", "", colnames(design), fixed = T)
+design
+
+keep <- rowSums(cpm(x)>1) >= 2 #Entweder mussen 2x Werte über 1CPM sein oder man macht´s mit "isexpr <- filterByExpr(d, group=Group)"
+x <- x[keep, , keep.lib.sizes=FALSE]
+
+x <- calcNormFactors(x, method = "TMM")
+
+design <- model.matrix(~ 0 + x$samples$group) #DesignMatrix
+
+colnames(design) <- levels(x$samples$group)
+
+x <- estimateGLMCommonDisp(x, design)
+
+x <- estimateGLMTrendedDisp(x, design, method="power")
+
+x <- estimateGLMTagwiseDisp(x,design)
+
+plotBCV(x)
+
+design.mat <- model.matrix(~ 0 + x$samples$group)
+colnames(design.mat) <- c("high", "low", "moderate")
+
+fit.edgeR <- glmFit(x, design)
+
+contrasts.edgeR <- makeContrasts(high- low, levels=design.mat)
+
+lrt.edgeR <- glmLRT(fit.edgeR, contrast=contrasts.edgeR)
+
+edgeR_results <- lrt.edgeR$table
+
+sig.edgeR <- topTags(lrt.edgeR, n = 25300, adjust.method = "BH")#, sort.by = "PValue", p.value = 0.05)
+
+edgeR_results <- sig.edgeR$table
+
+write.table(edgeR_results, file="edgeR_results.txt", sep="\t", col.names = NA, quote = F)
+
+edgeR_results_DGA_GeneSymbol <- edgeR_results
+edgeR_results_DGA_GeneSymbol$ID <- c(rownames(edgeR_results_DGA_GeneSymbol))
+edgeR_results_DGA_GeneSymbol$Gene_Symbol <- mapIds(org.Hs.eg.db, keys = edgeR_results_DGA_GeneSymbol$ID, column= "SYMBOL", keytype =  "ENTREZID")
+edgeR_results_DGA_GeneSymbol <- edgeR_results_DGA_GeneSymbol[-6]
+
+write.table(edgeR_results_DGA_GeneSymbol, "edgeR_results_DGA_GeneSymbol.txt", sep="\t", col.names = NA, quote = F)
+
+volcanoplot <- edgeR_results %>%
+  mutate(class = case_when(logFC >= 1 & FDR < 0.05 ~ "Up",
+                           logFC <= -1 & FDR < 0.05 ~ "Down",
+                           (logFC < 1 & logFC > -1) | FDR >= 0.05 ~ "Not Sig"))
+
+DEG_Volcanoplot <- ggplot(data = volcanoplot, mapping = aes(x=logFC, y=-log(FDR), colour = class)) +
+  geom_point(size = 0.5) +
+  scale_colour_manual(values = c(Up = "violet", Down = "blue", `Not Sig` = "grey")) +
+  geom_vline(xintercept = 1, color ="gray") +
+  geom_vline(xintercept = -1, color ="gray") +
+  geom_hline(yintercept = -log(0.05), color = "gray") + 
+  coord_cartesian(ylim = c(0,220), xlim = c(-10, 8)) +
+  xlab("log2FC") + 
+  ylab("-log10ad.P") + 
+  theme(plot.background = element_rect(fill = "white"), 
+  panel.background = element_rect(fill = "white", colour="grey")) +
+  theme(axis.title.y = element_text(size = 15), axis.title.x = element_text(size = 12))
+
+  #theme(panel.grid.major = element_line(colour = "grey", linetype = "dotted"), panel.grid.minor = element_line(colour = "grey", size = 0,5))
+
+
+DEG_Volcanoplot
+ggsave("DEG_Volcanoplot.tiff", plot = DEG_Volcanoplot, width = 10, height= 10, units = "cm", dpi = 75)
+
+TCGA_HNSC_GDCHarmonized_HTSeqFPKM <- read_delim("~/Desktop/Doktorarbeit/NewTry/TCGA_HNSC_GDCHarmonized_HTSeqFPKM.txt", "\t", escape_double = FALSE, trim_ws = TRUE) # FPKM data
+
+TCGA_HNSC_GDCHarmonized_HTSeqCounts <- read_delim("~/Desktop/Doktorarbeit/NewTry/TCGA_HNSC_GDCHarmonized_HTSeqCounts.txt", "\t", escape_double = FALSE, trim_ws = TRUE) # Count data
+
+AXL <- tibble(Patient_ID = str_replace_all(colnames(TCGA_HNSC_GDCHarmonized_HTSeqFPKM),"-01$", ""),
+              "558" = TCGA_HNSC_GDCHarmonized_HTSeqFPKM %>% 
+                filter(Entrez_Gene_ID == 558) %>%
+                t(.),
+              Sample_ID = colnames(TCGA_HNSC_GDCHarmonized_HTSeqFPKM)) 
+
+
+AXL <- mutate(AXL, Group = case_when(`558` >= quantile(`558`, probs = 0.75, na.rm = T)~ "high", 
+                                     `558` > quantile(`558`, probs = 0.25, na.rm = T) & `558` < quantile(`558`, probs = 0.75, na.rm = T) ~"moderate",
+                                     `558` <= quantile(`558`, probs = 0.25, na.rm = T)~ "low"))
+
+exprSet <- TCGA_HNSC_GDCHarmonized_HTSeqCounts %>% # For DEG use counts 
+  as.data.frame(.)
+rownames(exprSet) <- exprSet$Entrez_Gene_ID
+exprSet$Entrez_Gene_ID <- NULL
+
+temp <- AXL %>%
+  dplyr::select(Sample_ID, Group)
+temp <- as.data.frame(colnames(exprSet)) %>%
+  left_join(.,temp, by = c("colnames(exprSet)" = "Sample_ID")) %>%
+  na.omit(.)
+
+  #dplyr::select(temp$`colnames(exprSet)`)
+
+x <- DGEList(counts = exprSet, group = temp$Group, remove.zeros = FALSE)
+
+
+design <- model.matrix(~0+x$samples$group)
+colnames(design) <- gsub("x$samples$group", "", colnames(design), fixed = T)
+design
+
+keep <- rowSums(cpm(x)>1) >= 2 #Entweder mussen 2x Werte über 1CPM sein oder man macht´s mit "isexpr <- filterByExpr(d, group=Group)"
+x <- x[keep, , keep.lib.sizes=FALSE]
+
+
+#EdgeR
+x <- calcNormFactors(x, method = "TMM")
+
+design <- model.matrix(~ 0 + x$samples$group) #DesignMatrix
+
+colnames(design) <- levels(x$samples$group)
+
+x <- estimateGLMCommonDisp(x, design)
+
+x <- estimateGLMTrendedDisp(x, design, method="power")
+
+x <- estimateGLMTagwiseDisp(x,design)
+
+plotBCV(x)
+
+design.mat <- model.matrix(~ 0 + x$samples$group)
+colnames(design.mat) <- c("high", "low", "moderate")
+
+fit.edgeR <- glmFit(x, design)
+
+contrasts.edgeR <- makeContrasts(high- low, levels=design.mat)
+
+lrt.edgeR <- glmLRT(fit.edgeR, contrast=contrasts.edgeR)
+
+edgeR_results <- lrt.edgeR$table
+
+sig.edgeR <- topTags(lrt.edgeR, n = 25300, adjust.method = "BH")#, sort.by = "PValue", p.value = 0.05)
+
+edgeR_results <- sig.edgeR$table
+
+write.table(edgeR_results, file="edgeR_results.txt", sep="\t", col.names = NA, quote = F)
+
+edgeR_results_DGA_GeneSymbol <- edgeR_results
+edgeR_results_DGA_GeneSymbol$ID <- c(rownames(edgeR_results_DGA_GeneSymbol))
+edgeR_results_DGA_GeneSymbol$Gene_Symbol <- mapIds(org.Hs.eg.db, keys = edgeR_results_DGA_GeneSymbol$ID, column= "SYMBOL", keytype =  "ENTREZID")
+edgeR_results_DGA_GeneSymbol <- edgeR_results_DGA_GeneSymbol[-6]
+
+write.table(edgeR_results_DGA_GeneSymbol, "edgeR_results_DGA_GeneSymbol.txt", sep="\t", col.names = NA, quote = F)
+
+volcanoplot <- edgeR_results %>%
+  mutate(class = case_when(logFC >= 1 & FDR < 0.05 ~ "Up",
+                           logFC <= -1 & FDR < 0.05 ~ "Down",
+                           (logFC < 1 & logFC > -1) | FDR >= 0.05 ~ "Not Sig"))
+
+DEG_Volcanoplot <- ggplot(data = volcanoplot, mapping = aes(x=logFC, y=-log(FDR), colour = class)) +
+  geom_point(size = 0.5) +
+  scale_colour_manual(values = c(Up = "violet", Down = "blue", `Not Sig` = "grey")) +
+  geom_vline(xintercept = 1, color ="gray") +
+  geom_vline(xintercept = -1, color ="gray") +
+  geom_hline(yintercept = -log(0.05), color = "gray") + 
+  coord_cartesian(ylim = c(0,220), xlim = c(-10, 8)) +
+  xlab("log2FC") + 
+  ylab("-log10ad.P") + 
+  theme(plot.background = element_rect(fill = "white"), 
+  panel.background = element_rect(fill = "white", colour="grey")) +
+  theme(axis.title.y = element_text(size = 15), axis.title.x = element_text(size = 12))
+
+
+DEG_Volcanoplot
+ggsave("DEG_Volcanoplot.tiff", plot = DEG_Volcanoplot, width = 10, height= 10, units = "cm", dpi = 75)
