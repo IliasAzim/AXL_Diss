@@ -1,0 +1,72 @@
+library(readr)
+library(readxl) 
+library(tidyverse) 
+library(limma) 
+library(edgeR) 
+library(AnnotationDbi) 
+library(org.Hs.eg.db) 
+
+
+TCGA_HNSC_GDCHarmonized_HTSeqFPKM <- read_delim("~/Desktop/Doktorarbeit/NewTry/TCGA_HNSC_GDCHarmonized_HTSeqFPKM.txt", "\t", escape_double = FALSE, trim_ws = TRUE) # FPKM data
+
+TCGA_HNSC_GDCHarmonized_HTSeqCounts <- read_delim("~/Desktop/Doktorarbeit/NewTry/TCGA_HNSC_GDCHarmonized_HTSeqCounts.txt", "\t", escape_double = FALSE, trim_ws = TRUE) # Count data
+
+
+AXL <- tibble(Patient_ID = str_replace_all(colnames(TCGA_HNSC_GDCHarmonized_HTSeqFPKM),"-01$", ""),
+              "558" = TCGA_HNSC_GDCHarmonized_HTSeqFPKM %>% 
+                filter(Entrez_Gene_ID == 558) %>%
+                t(.),
+              Sample_ID = colnames(TCGA_HNSC_GDCHarmonized_HTSeqFPKM)) 
+              
+AXL <- mutate(AXL, Group = case_when(`558` >= quantile(`558`, probs = 0.75, na.rm = T)~ "high", 
+                                     `558` > quantile(`558`, probs = 0.25, na.rm = T) & `558` < quantile(`558`, probs = 0.75, na.rm = T) ~"moderate",
+                                     `558` <= quantile(`558`, probs = 0.25, na.rm = T)~ "low"))
+TCGA_clinicaldata <- AXL
+write.table(TCGA_clinicaldata, "TCGA_clinicaldata.txt", sep="\t", row.names=FALSE, na="") # how to safe a file
+
+exprSet <- TCGA_HNSC_GDCHarmonized_HTSeqCounts %>% # For DEG use counts 
+  as.data.frame(.)
+rownames(exprSet) <- exprSet$Entrez_Gene_ID
+exprSet$Entrez_Gene_ID <- NULL
+
+temp <- AXL %>%
+  dplyr::select(Sample_ID, Group)
+temp <- as.data.frame(colnames(exprSet)) %>%
+  left_join(.,temp, by = c("colnames(exprSet)" = "Sample_ID")) %>%
+  na.omit(.)
+
+exprSet <- exprSet %>%
+  dplyr::select(temp$`colnames(exprSet)`)
+
+x <- DGEList(counts= exprSet, lib.size = NULL,
+             norm.factors =NULL, samples = NULL,
+             group = temp$Group, genes = NULL, remove.zeros = FALSE)
+
+design <- model.matrix(~0+x$samples$group)
+colnames(design) <- gsub("x$samples$group", "", colnames(design), fixed = T)
+design
+
+keep <- filterByExpr(x, design = design, group = NULL, lib.size = NULL,
+                     min.count = 10, min.total.count = 15)
+                     
+x <- x[keep,,keep.lib.sizes=FALSE]
+x <- calcNormFactors(x, method = "TMM")
+
+contr.matrix <- makeContrasts(
+  HvsL = high-low, 
+  levels = colnames(design))
+contr.matrix
+
+#voom transformation is necessary for RNA-Seq data
+v <- voom(x, design, plot=TRUE)
+
+vfit <- lmFit(v, design)
+vfit <- contrasts.fit(vfit, contrasts=contr.matrix)
+efit <- eBayes(vfit)
+plotSA(efit, main="Final model: Mean-variance trend") ## Anzeige Plots
+
+DEG_AXL_highvslow <- topTable(efit, n=Inf, genelist = rownames(efit), sort.by = "logFC")
+
+DEG_AXL_highvslow$Gene_Symbol <- mapIds(org.Hs.eg.db, keys = DEG_AXL_highvslow$ID, column= "SYMBOL", keytype =  "ENTREZID")
+
+write.table(DEG_AXL_highvslow, "DEG_AXL_highvslow.txt", sep="\t", row.names=FALSE, na="")
