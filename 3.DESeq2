@@ -1,0 +1,92 @@
+library(readr) 
+library(readxl) 
+library(tidyverse) 
+library(DESeq2)
+library(AnnotationDbi)
+library(org.Hs.eg.db)
+library(Biobase)
+
+TCGA_HNSC_GDCHarmonized_HTSeqFPKM <- read_delim("~/Desktop/Doktorarbeit/NewTry/TCGA_HNSC_GDCHarmonized_HTSeqFPKM.txt", "\t", escape_double = FALSE, trim_ws = TRUE)
+
+rnaseq_data <- read_delim("~/Desktop/Doktorarbeit/NewTry/TCGA_HNSC_GDCHarmonized_HTSeqCounts.txt", "\t", escape_double = FALSE, trim_ws = TRUE)
+
+AXL <- tibble(Patient_ID = str_replace_all(colnames(TCGA_HNSC_GDCHarmonized_HTSeqFPKM),"-01$", ""),
+               "558" = TCGA_HNSC_GDCHarmonized_HTSeqFPKM %>% 
+                 filter(Entrez_Gene_ID == 558) %>%
+                 t(.),
+               Sample_ID = colnames(TCGA_HNSC_GDCHarmonized_HTSeqFPKM)) 
+
+AXL <- mutate(AXL, Group = case_when(`558` >= quantile(`558`, probs = 0.75, na.rm = T)~ "high", 
+                                       `558` > quantile(`558`, probs = 0.25, na.rm = T) & `558` < quantile(`558`, probs = 0.75, na.rm = T) ~"moderate",
+                                       `558` <= quantile(`558`, probs = 0.25, na.rm = T)~ "low"))
+
+eset <- rnaseq_data %>% 
+  as.data.frame(.)
+rownames(eset) <- eset$Entrez_Gene_ID
+eset$Entrez_Gene_ID <- NULL
+
+temp <- AXL %>%
+  dplyr::select(Sample_ID, Group)
+temp <- as.data.frame(colnames(eset)) %>%
+  left_join(.,temp, by = c("colnames(eset)" = "Sample_ID")) %>%
+  na.omit(.)
+
+eset <- eset %>%
+  dplyr::select(temp$`colnames(eset)`)
+
+(colData <- data.frame(row.names=colnames(eset), temp = temp ))
+#(colData <- colData[-1])  (Wenn Dopplung stören sollte)
+
+
+x <- DESeqDataSetFromMatrix(countData = eset, 
+                            colData = colData, 
+                            design = ~temp.Group)
+  
+# >=10
+keep <- rowSums(counts(x)) >= 10 
+x <- x[keep,]
+
+x <- DESeq(x)
+
+plotDispEsts(x)
+
+res <- results(x, contrast=c("temp.Group", "high","low"))
+head(res)
+head(results(x, tidy=TRUE))
+
+resOrdered <- res[order(res$pvalue),]
+resOrdered
+
+DEG = as.data.frame(resOrdered)
+AXL_DeSeq2 = na.omit(DEG)
+
+write.table(AXL_DeSeq2, file="AXL_DeSeq2_DGA.txt", sep="\t", col.names = NA, quote = F)
+
+AXL_DeSeq2_DGA_GeneSymbol <- AXL_DeSeq2 
+AXL_DeSeq2_DGA_GeneSymbol$ID <- c(rownames(AXL_DeSeq2_DGA_GeneSymbol))
+AXL_DeSeq2_DGA_GeneSymbol$Gene_Symbol <- mapIds(org.Hs.eg.db, keys = AXL_DeSeq2_DGA_GeneSymbol$ID, column= "SYMBOL", keytype =  "ENTREZID")
+AXL_DeSeq2_DGA_GeneSymbol <- AXL_DeSeq2_DGA_GeneSymbol[-7]
+
+write.table(AXL_DeSeq2_DGA_GeneSymbol, "AXL_DeSeq2_DGA_GeneSymbol.txt", sep="\t", col.names = NA, quote = F)
+
+volcanoplot <- AXL_DeSeq2 %>%
+  mutate(class = case_when(log2FoldChange >= 1 & padj < 0.05 ~ "Up",
+                           log2FoldChange <= -1 & padj < 0.05 ~ "Down",
+                           (log2FoldChange < 1 & log2FoldChange > -1) | padj >= 0.05 ~ "Not Sig"))
+
+
+DEG_Volcanoplot <- ggplot(data = volcanoplot, mapping = aes(x=log2FoldChange, y=-log(padj), colour = class)) +
+  geom_point(size = 0.5) + 
+  scale_colour_manual(values = c(Up = "violet", Down = "blue", `Not Sig` = "grey")) +
+  geom_vline(xintercept = 1, color ="gray") +
+  geom_vline(xintercept = -1, color ="gray") +
+  geom_hline(yintercept = -log(0.05), color = "gray") + 
+  coord_cartesian(ylim = c(0,200)) + 
+  xlab("log2FC") + 
+  ylab("-log ad.P") + 
+  theme(plot.background = element_rect(fill = "white"), 
+  panel.background = element_rect(fill = "white", colour="grey")) +
+  theme(axis.title.y = element_text(size = 15), axis.title.x = element_text(size = 12))
+
+DEG_Volcanoplot
+ggsave("AXL_Deseq_DEG_Volcanoplot.tiff", plot = DEG_Volcanoplot, width = 10, height= 10, units = "cm", dpi = 75)
