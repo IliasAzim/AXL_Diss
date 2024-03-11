@@ -1,0 +1,188 @@
+#Heatmap and Clustering
+library(readr) 
+library(readxl)
+library(tidyverse) 
+library(limma) 
+library(edgeR) 
+library(AnnotationDbi) 
+library(org.Hs.eg.db) 
+library(ComplexHeatmap) 
+library(circlize) 
+library(RColorBrewer) 
+library(dplyr)
+
+counts <- read_delim("~/Desktop/Doktorarbeit/NewTry/TCGA_HNSC_GDCHarmonized_HTSeqCounts.txt", "\t", escape_double = FALSE, trim_ws = TRUE) # Count data
+FPKM <- read_delim("~/Desktop/Doktorarbeit/NewTry/TCGA_HNSC_GDCHarmonized_HTSeqFPKM.txt", "\t", escape_double = FALSE, trim_ws = TRUE) # FPKM data
+
+RiskScore<-  read_excel("~/Desktop/Doktorarbeit/AXL/Heatmap/hm_new_try/final_edition/Column_annotation1.xlsx", sheet = 8)
+Riskscore<- RiskScore%>%
+  dplyr::select(Patient_ID, risk, RiskScore)
+RiskHM<- RiskScore%>%
+  dplyr::select(Patient_ID,RiskScore)
+
+GeneID_overlap <- read_excel("~/Desktop/Doktorarbeit/AXL/Heatmap/hm_new_try/final_edition/row_annotation1.xlsx", sheet = 3)
+
+GeneID_overlap <- as.data.frame(GeneID_overlap)
+
+AXL <- tibble(Patient_ID = str_replace_all(colnames(FPKM),"-01$", ""),
+              "558" = FPKM %>% 
+                filter(Entrez_Gene_ID == 558) %>%
+                t(.),
+              Sample_ID = colnames(FPKM)) 
+
+AXL <- mutate(AXL, Group = case_when(`558` >= quantile(`558`, probs = 0.75, na.rm = T)~ "high", 
+                                     `558` > quantile(`558`, probs = 0.25, na.rm = T) & `558` < quantile(`558`, probs = 0.75, na.rm = T) ~"moderate",
+                                     `558` <= quantile(`558`, probs = 0.25, na.rm = T)~ "low"))
+
+#Clustering======
+heatmap <- FPKM%>%
+  filter(FPKM$Entrez_Gene_ID %in% GeneID_overlap$Genes) 
+
+colnames(heatmap) <- gsub("-01", "", colnames(heatmap), fixed = T)
+row.names(heatmap) <- heatmap$Entrez_Gene_ID #save genes as row names
+heatmap <- as.data.frame(heatmap)
+heatmap[1] <- NULL
+heatmap <- as.matrix.data.frame(heatmap)
+
+#Ln+1 Transformation auf die Daten anwenden
+heatmap <- log(heatmap+1)
+heatmap <- scale(t(heatmap), center = T, scale = T) 
+
+heatmap <- as.data.frame(heatmap)
+heatmap$Patient_ID <- c(rownames(heatmap))
+
+heatmap <- heatmap%>%
+  filter(heatmap$Patient_ID %in% RiskScore$Patient_ID)
+
+heatmap$Patient_ID <- NULL
+
+heatmap <- as.matrix.data.frame(heatmap)
+
+TCGA_clinicaldata <- read_excel("~/Desktop/Doktorarbeit/NewTry/TCGA_HNSC_Master_clinical_data_v1.xlsx")
+
+TCGA_clinicaldata <- left_join(Riskscore, TCGA_clinicaldata, by = "Patient_ID") 
+
+AXL[2:3] <- NULL 
+
+TCGA_clinicaldata <- left_join(AXL, TCGA_clinicaldata, by = "Patient_ID") #adding to your clinicaldata
+
+#Annotations========
+
+clinical <- TCGA_clinicaldata %>%
+  filter(!is.na(TCGA_clinicaldata$risk)) %>% 
+  dplyr::select(Patient_ID,Group, risk, OS,RiskScore) %>% 
+  dplyr::rename(AXL = Group) %>% #optional
+  as.data.frame(.) #data frame
+
+heatmap <- as.data.frame(heatmap)
+heatmap <- tibble::rownames_to_column(heatmap, "Patient_ID")
+heatmap <- left_join(heatmap, RiskHM, by = "Patient_ID") 
+heatmap  <- heatmap  %>%
+  
+  arrange(abs(RiskScore))
+heatmap <- as.data.frame(heatmap)
+heatmap <- tibble::column_to_rownames(heatmap, "Patient_ID")
+heatmap$RiskScore <- NULL
+heatmap <- as.matrix.data.frame(heatmap)
+
+row.names(clinical) <- clinical$Patient_ID  #Tabelle ändern, Pat.ID ganz nach links
+row.names(RiskHM) <- RiskHM$Patient_ID  #Tabelle ändern, Pat.ID ganz nach links
+
+RiskHM  <- RiskHM  %>%
+dplyr::rename(riskScoren = RiskScore)
+RiskHM  <- RiskHM  %>%
+RiskHM  <- RiskHM  %>%
+  as.data.frame(.)
+RiskHM$Patient_ID <- NULL
+
+clinical <- clinical  %>%
+
+clinical<- as.data.frame(clinical)
+clinical$Patient_ID <- NULL
+clinical<- as.data.frame(clinical)
+
+mypal <- brewer.pal(3, "Set1") # making colours
+
+annocolours <- list(
+  OS = c("1"=mypal[1], "0"=mypal[2], "NA"="black"),
+  risk = c(low="grey",high="black" ),
+  AXL = c(high=mypal[1],low=mypal[2], moderate="black"))
+
+
+Gene_expression <- GeneID_overlap
+gene <- Gene_expression
+row.names(gene) <- Gene_expression$Genes
+gene$Genes <- NULL 
+gene <- as.data.frame(gene)
+
+gene_annotation = HeatmapAnnotation(df = gene , which = "row", col = list(Regulation = c(high=mypal[1], low=mypal[2])))
+clinical_annotations = HeatmapAnnotation( df= clinical, which = "column",col = annocolours, annotation_name_side = "right")
+
+
+clinical_annotations = HeatmapAnnotation(df = clinical,
+which = "column",
+col = list(  
+  AXL= c("high"="red", "low" = "blue", "moderate" = "black"),
+  risk= c("high"="black", "low"="grey"),
+  OS = c("0" = "blue", "1" = "red1", "NA" = "black")),
+annotation_name_side = "right",
+na_col = "white")
+
+
+col_rna = colorRamp2(c(-4, 0, 4), c("blue", "#EEEEEE", "red"), space = "LAB", transparency = 0)
+#col_rna = colorRamp2(c(-1.7, 0, 1.4), c("#6666FF", "white", "#CC0000"), space = "LAB", transparency = 0)
+
+#Heatmap========
+
+HM_rna <- ComplexHeatmap::Heatmap(t(heatmap),
+                                  col = col_rna,
+                                  name = "Expression",
+                                  clustering_distance_rows = "euclidean",
+                                  clustering_method_rows = "ward.D2",
+                                  cluster_rows = TRUE,
+                                  cluster_columns = FALSE,
+                                  #clustering_distance_columns = "euclidean",
+                                  #clustering_method_columns = "ward.D2",
+                                  column_split =, 
+                                  column_title =,
+                                  column_title_side = "bottom",
+                                  row_split = 2 ,
+                                  row_title =c("","") ,
+                                  row_title_rot = 0,
+                                  show_column_names = FALSE,
+                                  show_row_names = T, 
+                                  use_raster = F, 
+                                  raster_device = "png",
+                                  top_annotation = clinical_annotations,
+                                  left_annotation = gene_annotation)
+
+draw(HM_rna)
+
+
+
+HM_rna <- ComplexHeatmap::Heatmap(heatmap,
+                                  col = col_rna,
+                                  name = "Expression",
+                                  clustering_distance_rows = "euclidean",
+                                  clustering_method_rows = "ward.D2",
+                                  #row_names_gp = grid::gpar(fontsize=10),
+                                  cluster_rows = TRUE,
+                                  row_split = 3,
+                                  cluster_columns = FALSE,
+                                  #column_split = 2,
+                                  #show_row_title = F,
+                                  column_title =,
+                                  show_column_names = F,
+                                  show_row_names = T, 
+                                  show_row_dend = F,
+                                  use_raster = F,
+                                  raster_device = "png",
+                                  top_annotation = clinical_annotations, 
+                                  left_annotation = gene_annotation)
+
+tiff(filename = "6´7AXL-RiskHeatmap.tiff",width = 32,height = 32,units = "cm",pointsize = 12,res=400)
+draw(HM_rna)
+dev.off()
+
+
+
